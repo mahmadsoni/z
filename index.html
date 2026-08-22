@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Booyah Vault — Free Fire Rewards</title>
+<meta name="description" content="Claim daily bonuses, watch ads, spin the wheel, and redeem points for Free Fire rewards.">
+
+<!-- ============================================================
+     FONTS — Rajdhani (HUD / squad-card display face) + Inter (body)
+     ============================================================ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+
+<!-- ============================================================
+     TAILWIND CSS (CDN build — no build step, fully static)
+     ============================================================ -->
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          void:    '#0A0C0E',   // page background
+          panel:   '#14171B',   // card surface
+          panel2:  '#1B1F24',   // raised card surface
+          line:    '#262B31',   // hairline borders
+          gold:    '#F2B705',   // primary currency / accent
+          goldd:   '#C99404',   // darker gold for gradients
+          ember:   '#FF5A36',   // brand red-orange (danger / primary CTA)
+          emberd:  '#C7351A',
+          ok:      '#3ADC8C',
+          mute:    '#8B939B',
+        },
+        fontFamily: {
+          display: ['Rajdhani', 'sans-serif'],
+          body: ['Inter', 'sans-serif'],
+          mono: ['"JetBrains Mono"', 'monospace'],
+        },
+      },
+    },
+  };
+</script>
+
+<!-- ============================================================
+     ADSTERRA — replace placeholders with your own zone codes.
+     See "ADSTERRA SETUP" in the instructions at the end of chat.
+     ============================================================ -->
+<!-- Social Bar (site-wide, loads once) — SocialBar_1 zone, live -->
+<script src="https://pl29496771.profitableratecpmnetwork.com/9d/00/b2/9d00b2d0bb8e93d9f4090c183a1fc717.js"></script>
+
+<style>
+  /* ---------------------------------------------------------------
+     Small set of hand-written utilities Tailwind can't express:
+     the HUD scanline texture, wheel geometry, glow, ticket-tear card
+     edges, and the tier-badge hex shape (the page's signature motif).
+     --------------------------------------------------------------- */
+
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: #0A0C0E;
+    background-image:
+      radial-gradient(circle at 15% 0%, rgba(242,183,5,0.08), transparent 40%),
+      radial-gradient(circle at 100% 30%, rgba(255,90,54,0.10), transparent 45%),
+      repeating-linear-gradient(180deg, rgba(255,255,255,0.012) 0px, rgba(255,255,255,0.012) 1px, transparent 1px, transparent 3px);
+  }
+
+  ::selection { background: #F2B705; color: #0A0C0E; }
+
+  /* Respect reduced-motion preference everywhere */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  /* Hex tier badge — the page's signature shape, echoing FF rank icons */
+  .hex {
+    clip-path: polygon(25% 3%, 75% 3%, 100% 50%, 75% 97%, 25% 97%, 0% 50%);
+  }
+
+  /* Angled "ticket" card edge used on the redeem card */
+  .tear-edge {
+    -webkit-mask-image: radial-gradient(circle 7px at 0 50%, transparent 7px, black 7.5px),
+                         radial-gradient(circle 7px at 100% 50%, transparent 7px, black 7.5px);
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-position: left center, right center;
+  }
+
+  .glow-gold   { box-shadow: 0 0 0 1px rgba(242,183,5,0.35), 0 0 40px -8px rgba(242,183,5,0.55); }
+  .glow-ember  { box-shadow: 0 0 0 1px rgba(255,90,54,0.4), 0 0 40px -8px rgba(255,90,54,0.6); }
+
+  .text-glow { text-shadow: 0 0 18px rgba(242,183,5,0.55); }
+
+  /* Points counter tick-up flash */
+  @keyframes flash-pop {
+    0% { transform: scale(1); }
+    30% { transform: scale(1.18); color: #F2B705; }
+    100% { transform: scale(1); }
+  }
+  .pop { animation: flash-pop 420ms ease-out; }
+
+  /* Spin wheel pointer bounce on land */
+  @keyframes pointer-hit {
+    0%, 100% { transform: translateX(-50%) rotate(0deg); }
+    30% { transform: translateX(-50%) rotate(-14deg); }
+    60% { transform: translateX(-50%) rotate(8deg); }
+  }
+  .pointer-hit { animation: pointer-hit 380ms ease-out; }
+
+  /* Ambient pulse for the "ready" state dot */
+  @keyframes pulse-dot {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(58,220,140,0.55); }
+    70% { box-shadow: 0 0 0 8px rgba(58,220,140,0); }
+  }
+  .pulse-dot { animation: pulse-dot 1.8s infinite; }
+
+  /* Modal backdrop */
+  .backdrop { background: rgba(6,7,8,0.82); backdrop-filter: blur(3px); }
+
+  /* Progress ring transition */
+  .ring-progress { transition: stroke-dashoffset 700ms cubic-bezier(.22,1,.36,1); }
+
+  /* Custom scrollbar for the activity feed */
+  .feed::-webkit-scrollbar { width: 4px; }
+  .feed::-webkit-scrollbar-thumb { background: #262B31; border-radius: 4px; }
+
+  input:focus-visible, button:focus-visible, a:focus-visible {
+    outline: 2px solid #F2B705; outline-offset: 2px;
+  }
+
+  .btn-press { transition: transform 120ms ease; }
+  .btn-press:active { transform: scale(0.96); }
+
+  .disabled-card { filter: grayscale(0.6); opacity: 0.55; }
+</style>
+</head>
+
+<body class="font-body text-white min-h-screen pb-24">
+
+<!-- ================= TOP HUD BAR ================= -->
+<header class="sticky top-0 z-30 border-b border-line bg-void/90 backdrop-blur">
+  <div class="max-w-lg mx-auto px-4 py-3 flex items-center justify-between gap-3">
+    <div class="flex items-center gap-2">
+      <div class="w-9 h-9 rounded-md bg-gradient-to-br from-ember to-emberd flex items-center justify-center font-display font-bold text-lg glow-ember">B</div>
+      <div class="leading-tight">
+        <p class="font-display font-bold text-[15px] tracking-wide">BOOYAH<span class="text-gold">VAULT</span></p>
+        <p class="text-[10px] text-mute tracking-widest uppercase -mt-0.5">Reward Ops</p>
+      </div>
+    </div>
+    <div id="hud-points" class="flex items-center gap-1.5 bg-panel border border-line rounded-full pl-1.5 pr-3 py-1">
+      <span class="w-6 h-6 rounded-full bg-gradient-to-br from-gold to-goldd flex items-center justify-center text-[11px] font-bold text-void">◆</span>
+      <span id="pointsDisplay" class="font-mono font-bold text-gold text-[15px]">0</span>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-lg mx-auto px-4">
+
+  <!-- ================= HERO: TIER BADGE + PROGRESS ================= -->
+  <section class="pt-6 pb-2">
+    <div class="relative rounded-2xl border border-line bg-gradient-to-b from-panel2 to-panel p-5 overflow-hidden">
+      <div class="absolute -top-10 -right-10 w-40 h-40 bg-gold/10 rounded-full blur-2xl"></div>
+      <div class="absolute -bottom-14 -left-10 w-40 h-40 bg-ember/10 rounded-full blur-2xl"></div>
+
+      <div class="relative flex items-center gap-4">
+        <!-- Hex tier badge -->
+        <div class="relative shrink-0">
+          <div id="tierHex" class="hex w-16 h-16 bg-gradient-to-br from-gold to-goldd flex items-center justify-center glow-gold">
+            <span id="tierIcon" class="font-display font-bold text-void text-xl">B</span>
+          </div>
+        </div>
+        <div class="flex-1 min-w-0">
+          <p class="text-[10px] uppercase tracking-widest text-mute">Current rank</p>
+          <p id="tierName" class="font-display font-bold text-xl leading-tight">Bronze Operator</p>
+          <p class="text-xs text-mute mt-0.5"><span id="pointsToNext">10,000</span> pts to Redeem Tier</p>
+        </div>
+      </div>
+
+      <!-- Progress bar toward 10,000 pt redeem threshold -->
+      <div class="relative mt-4">
+        <div class="h-2.5 rounded-full bg-void border border-line overflow-hidden">
+          <div id="progressBar" class="h-full rounded-full bg-gradient-to-r from-ember to-gold transition-all duration-700 ease-out" style="width:0%"></div>
+        </div>
+        <div class="flex justify-between mt-1.5 text-[10px] font-mono text-mute">
+          <span>0</span>
+          <span class="text-gold font-semibold">10,000 — Redeem unlocked</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= DAILY BONUS ================= -->
+  <section class="mt-4">
+    <div class="rounded-2xl border border-line bg-panel p-4 flex items-center gap-4">
+      <div class="hex w-12 h-12 bg-panel2 border border-line flex items-center justify-center text-2xl shrink-0">🎁</div>
+      <div class="flex-1 min-w-0">
+        <div class="flex items-center gap-2">
+          <p class="font-display font-bold text-base">Daily bonus</p>
+          <span id="streakBadge" class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-ember/15 text-ember border border-ember/30 hidden">🔥 0-day streak</span>
+        </div>
+        <p id="dailyStatus" class="text-xs text-mute mt-0.5">Claim free points every 24 hours.</p>
+      </div>
+      <button id="dailyBtn" class="btn-press shrink-0 font-display font-bold text-sm px-4 py-2.5 rounded-xl bg-gradient-to-r from-gold to-goldd text-void glow-gold">
+        Claim
+      </button>
+    </div>
+  </section>
+
+  <!-- ================= WATCH ADS ================= -->
+  <section class="mt-3">
+    <div class="rounded-2xl border border-line bg-panel p-4">
+      <div class="flex items-center gap-4">
+        <div class="hex w-12 h-12 bg-panel2 border border-line flex items-center justify-center text-2xl shrink-0">📺</div>
+        <div class="flex-1 min-w-0">
+          <p class="font-display font-bold text-base">Watch ad, earn points</p>
+          <p class="text-xs text-mute mt-0.5">+<span id="adRewardLabel">20</span> pts per ad · <span id="adsUntilSpinLabel">5</span> ads = 1 free spin</p>
+        </div>
+        <button id="watchAdBtn" class="btn-press shrink-0 font-display font-bold text-sm px-4 py-2.5 rounded-xl bg-panel2 border border-gold/40 text-gold">
+          Watch
+        </button>
+      </div>
+      <!-- Mini progress toward next spin credit -->
+      <div class="mt-3 flex items-center gap-1.5" id="adDotsRow"></div>
+    </div>
+  </section>
+
+  <!-- ================= SPIN WHEEL ================= -->
+  <section class="mt-3">
+    <div class="rounded-2xl border border-line bg-gradient-to-b from-panel2 to-panel p-4">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <p class="font-display font-bold text-base">Lucky spin</p>
+          <p class="text-xs text-mute"><span id="spinCreditsLabel">0</span> free spin(s) available</p>
+        </div>
+        <span id="spinReadyDot" class="w-2.5 h-2.5 rounded-full bg-line"></span>
+      </div>
+
+      <div class="relative w-64 h-64 mx-auto">
+        <!-- Pointer -->
+        <div id="wheelPointer" class="absolute left-1/2 -top-1.5 -translate-x-1/2 z-10 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-t-[18px] border-t-gold drop-shadow-lg"></div>
+        <canvas id="wheelCanvas" width="256" height="256" class="rounded-full border-4 border-panel2 shadow-2xl"></canvas>
+        <!-- Hub -->
+        <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div class="w-14 h-14 rounded-full bg-gradient-to-br from-gold to-goldd border-4 border-void flex items-center justify-center font-display font-bold text-void text-xs shadow-lg">SPIN</div>
+        </div>
+      </div>
+
+      <button id="spinBtn" class="btn-press w-full mt-4 font-display font-bold text-sm py-3 rounded-xl bg-gradient-to-r from-ember to-emberd text-white glow-ember disabled:opacity-40 disabled:grayscale disabled:cursor-not-allowed">
+        Spin the wheel
+      </button>
+      <p class="text-center text-[11px] text-mute mt-2">Earn spins by watching ads above — no purchase, ever.</p>
+    </div>
+  </section>
+
+  <!-- ================= REFERRAL ================= -->
+  <section class="mt-3">
+    <div class="rounded-2xl border border-line bg-panel p-4">
+      <div class="flex items-center gap-4">
+        <div class="hex w-12 h-12 bg-panel2 border border-line flex items-center justify-center text-2xl shrink-0">🤝</div>
+        <div class="flex-1 min-w-0">
+          <p class="font-display font-bold text-base">Invite your squad</p>
+          <p class="text-xs text-mute mt-0.5">Earn <span id="refPctLabel">10%</span> of every point your friends earn, for life.</p>
+        </div>
+      </div>
+
+      <div class="mt-3 flex items-stretch gap-2">
+        <input id="refLinkInput" readonly class="flex-1 min-w-0 bg-void border border-line rounded-lg px-3 py-2.5 text-xs font-mono text-mute truncate" value="">
+        <button id="copyRefBtn" class="btn-press shrink-0 px-3 rounded-lg bg-gold text-void font-display font-bold text-xs">Copy</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2 mt-3">
+        <div class="bg-void border border-line rounded-lg px-3 py-2 text-center">
+          <p id="refCountLabel" class="font-display font-bold text-lg text-white">0</p>
+          <p class="text-[10px] text-mute uppercase tracking-wide">Invited</p>
+        </div>
+        <div class="bg-void border border-line rounded-lg px-3 py-2 text-center">
+          <p id="refEarnLabel" class="font-display font-bold text-lg text-gold">0</p>
+          <p class="text-[10px] text-mute uppercase tracking-wide">Pts earned</p>
+        </div>
+      </div>
+      <p id="referredNotice" class="text-[11px] text-ok mt-2 hidden"></p>
+    </div>
+  </section>
+
+  <!-- ================= DIAMOND STORE ================= -->
+  <section class="mt-3 mb-6">
+    <div class="flex items-center justify-between mb-2 px-1">
+      <p class="font-display font-bold text-base">Diamond store</p>
+      <p class="text-[11px] text-mute">Spend points, get 💎</p>
+    </div>
+    <div id="storeGrid" class="grid grid-cols-2 gap-2.5"><!-- package cards injected by renderStore() --></div>
+  </section>
+
+  <!-- ================= ACTIVITY FEED ================= -->
+  <section class="mb-10">
+    <p class="text-[11px] uppercase tracking-widest text-mute mb-2 px-1">Activity</p>
+    <div id="activityFeed" class="feed rounded-2xl border border-line bg-panel divide-y divide-line max-h-48 overflow-y-auto text-sm">
+      <p class="px-4 py-6 text-center text-mute text-xs">No activity yet — claim your first bonus.</p>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============================================================
+     REDEEM MODAL — Telegram submission
+     ============================================================ -->
+<div id="redeemModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center backdrop">
+  <div class="w-full sm:max-w-sm bg-panel border border-line rounded-t-2xl sm:rounded-2xl p-5 max-h-[92vh] overflow-y-auto">
+    <div class="flex items-center justify-between mb-1">
+      <p class="font-display font-bold text-lg">Redeem 💎</p>
+      <button id="closeRedeemModal" class="text-mute text-xl leading-none px-2">&times;</button>
+    </div>
+    <div id="redeemPackageSummary" class="flex items-center gap-3 bg-void border border-gold/30 rounded-xl px-3 py-2.5 mb-3">
+      <span id="redeemPackageEmoji" class="text-2xl">💎</span>
+      <div class="flex-1 min-w-0">
+        <p id="redeemPackageTitle" class="font-display font-bold text-sm">100 Diamonds</p>
+        <p id="redeemPackageCost" class="text-[11px] text-mute font-mono">Costs 3,500 pts</p>
+      </div>
+    </div>
+    <p class="text-xs text-mute mb-4">Enter your Free Fire Player ID and upload proof. We review and top up manually within 24h.</p>
+
+    <form id="redeemForm" class="space-y-3">
+      <div>
+        <label class="text-[11px] uppercase tracking-wide text-mute">Free Fire Player ID</label>
+        <input id="playerIdInput" type="text" inputmode="numeric" required placeholder="e.g. 123456789"
+          class="w-full mt-1 bg-void border border-line rounded-lg px-3 py-2.5 text-sm font-mono focus-visible:border-gold">
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wide text-mute">In-game name (optional)</label>
+        <input id="playerNameInput" type="text" placeholder="e.g. GhostReaper"
+          class="w-full mt-1 bg-void border border-line rounded-lg px-3 py-2.5 text-sm focus-visible:border-gold">
+      </div>
+      <div>
+        <label class="text-[11px] uppercase tracking-wide text-mute">Proof screenshot</label>
+        <input id="proofInput" type="file" accept="image/*" required
+          class="w-full mt-1 text-xs text-mute file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gold file:text-void file:font-display file:font-bold file:text-xs">
+        <img id="proofPreview" class="hidden mt-2 rounded-lg border border-line max-h-40 object-cover w-full">
+      </div>
+
+      <p id="redeemError" class="text-xs text-ember hidden"></p>
+      <p id="redeemSuccess" class="text-xs text-ok hidden">Submitted! Check back within 24h — we'll message your in-game rewards after verification.</p>
+
+      <button id="submitRedeemBtn" type="submit" class="btn-press w-full font-display font-bold text-sm py-3 rounded-xl bg-gradient-to-r from-ember to-emberd text-white glow-ember disabled:opacity-40">
+        Send for verification
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ============================================================
+     WATCH-AD MODAL — Adsterra gate
+     ============================================================ -->
+<div id="adModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center backdrop">
+  <div class="w-full sm:max-w-sm bg-panel border border-line rounded-t-2xl sm:rounded-2xl p-5">
+    <div class="flex items-center justify-between mb-2">
+      <p class="font-display font-bold text-lg">Ad in progress</p>
+      <button id="closeAdModal" class="text-mute text-xl leading-none px-2">&times;</button>
+    </div>
+    <p class="text-xs text-mute mb-4">Keep this tab open. Your reward unlocks when the timer ends.</p>
+
+    <div class="relative w-28 h-28 mx-auto mb-4">
+      <svg viewBox="0 0 100 100" class="w-full h-full -rotate-90">
+        <circle cx="50" cy="50" r="44" stroke="#262B31" stroke-width="8" fill="none"/>
+        <circle id="adRingProgress" cx="50" cy="50" r="44" stroke="#F2B705" stroke-width="8" fill="none"
+          stroke-dasharray="276.5" stroke-dashoffset="276.5" stroke-linecap="round" class="ring-progress"/>
+      </svg>
+      <div class="absolute inset-0 flex items-center justify-center font-mono font-bold text-xl" id="adTimerLabel">15</div>
+    </div>
+
+    <button id="claimAdRewardBtn" disabled class="btn-press w-full font-display font-bold text-sm py-3 rounded-xl bg-gradient-to-r from-gold to-goldd text-void glow-gold disabled:opacity-30 disabled:grayscale">
+      Claim +<span id="adModalReward">20</span> pts
+    </button>
+  </div>
+</div>
+
+<!-- ============================================================
+     SPIN RESULT MODAL
+     ============================================================ -->
+<div id="spinResultModal" class="fixed inset-0 z-50 hidden items-center justify-center backdrop">
+  <div class="w-full max-w-xs mx-4 bg-panel border border-gold/50 rounded-2xl p-6 text-center glow-gold">
+    <p class="text-4xl mb-2" id="spinResultEmoji">🎉</p>
+    <p class="font-display font-bold text-xl" id="spinResultTitle">You won!</p>
+    <p class="text-mute text-sm mt-1" id="spinResultSub">+100 points added</p>
+    <button id="closeSpinResult" class="btn-press mt-4 w-full font-display font-bold text-sm py-2.5 rounded-xl bg-gold text-void">Nice</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-5 z-[60] hidden px-4 py-2.5 rounded-full bg-panel2 border border-line text-xs font-medium shadow-xl"></div>
+
+<script>
+/* =====================================================================
+   BOOYAH VAULT — CLIENT-SIDE STATE ENGINE
+   Everything here runs entirely in the browser. There is no backend:
+   points, streaks, spins and referral counters all live in
+   localStorage on the visitor's own device. See the setup notes
+   shared alongside this file for the honest limits that come with
+   that (anyone can edit localStorage; treat point balances as a
+   claim ticket to verify, not as audited currency).
+   ===================================================================== */
+
+// ---------------------------------------------------------------------
+// 1. CONFIG — tune these to change the whole game's economy in one place
+// ---------------------------------------------------------------------
+const CONFIG = {
+  DAILY_BASE_REWARD: 50,          // points for day-1 daily claim
+  DAILY_STREAK_STEP: 10,          // extra points per consecutive day
+  DAILY_STREAK_CAP: 150,          // max points a daily claim can give
+  DAILY_COOLDOWN_MS: 24 * 60 * 60 * 1000,
+  DAILY_STREAK_GRACE_MS: 48 * 60 * 60 * 1000, // miss a day beyond this and streak resets
+
+  AD_REWARD: 20,                  // points per watched ad
+  AD_WATCH_SECONDS: 15,           // gate time before reward is claimable
+  ADS_PER_SPIN: 5,                // ads needed to earn one free spin
+
+  REFERRAL_SIGNUP_BONUS: 100,     // points a NEW user gets for arriving via a link
+  REFERRAL_PERCENT: 0.10,         // % of a referred friend's earnings sent to referrer
+  // NOTE: referrer crediting only works when both accounts share this
+  // browser's localStorage (e.g. testing, or a kiosk flow). Crediting a
+  // referrer on a DIFFERENT device needs shared storage — see the
+  // "REFERRAL LIMITATION" note in the setup instructions.
+
+  REDEEM_THRESHOLD: 10000,   // used only for the hero progress bar's headline goal
+
+  // Diamond shop — smaller packs cost more per-diamond than big ones, on
+  // purpose: it's the same "save up for a better rate" pull real diamond
+  // top-ups use, and it gives players a reason to keep grinding past their
+  // first affordable tier instead of cashing out immediately.
+  DIAMOND_PACKAGES: [
+    { diamonds: 25,   cost: 1000  },
+    { diamonds: 50,   cost: 1900  },
+    { diamonds: 100,  cost: 3500  },
+    { diamonds: 240,  cost: 7500  },
+    { diamonds: 530,  cost: 16000 },
+    { diamonds: 1080, cost: 30000 },
+  ],
+
+  TIERS: [
+    { min: 0,     name: 'Bronze Operator',   icon: 'B' },
+    { min: 1000,  name: 'Silver Operator',   icon: 'S' },
+    { min: 3000,  name: 'Gold Operator',     icon: 'G' },
+    { min: 6000,  name: 'Platinum Operator', icon: 'P' },
+    { min: 10000, name: 'Heroic Operator',   icon: 'H' },
+  ],
+
+  // Wheel segments: label, points (null = no points), weight (higher = more likely)
+  WHEEL: [
+    { label: '50',        points: 50,   weight: 22, color: '#F2B705' },
+    { label: 'Try Again', points: 0,    weight: 18, color: '#1B1F24' },
+    { label: '100',       points: 100,  weight: 18, color: '#FF5A36' },
+    { label: '20',        points: 20,   weight: 20, color: '#8B939B' },
+    { label: '500',       points: 500,  weight: 6,  color: '#F2B705' },
+    { label: 'Try Again', points: 0,    weight: 14, color: '#1B1F24' },
+    { label: '200',       points: 200,  weight: 10, color: '#FF5A36' },
+    { label: '1000',      points: 1000, weight: 2,  color: '#C99404' },
+  ],
+};
+
+// ---------------------------------------------------------------------
+// 2. TELEGRAM BOT — fill these in, see setup notes at end of chat
+// ---------------------------------------------------------------------
+const TELEGRAM = {
+  BOT_TOKEN: 'YOUR_BOT_TOKEN_HERE',   // e.g. "123456789:AAExampleTokenFromBotFather"
+  CHAT_ID:   'YOUR_CHAT_ID_HERE',     // your numeric user/group/channel id
+};
+
+// ---------------------------------------------------------------------
+// 3. STATE — loaded from / persisted to localStorage
+// ---------------------------------------------------------------------
+const STORAGE_KEY = 'bv_state_v1';
+
+function defaultState() {
+  return {
+    points: 0,
+    lastDailyClaim: null,      // epoch ms
+    dailyStreak: 0,
+    spinCredits: 0,
+    adsSinceSpin: 0,
+    totalAdsWatched: 0,
+    referralCode: makeReferralCode(),
+    referredBy: null,
+    referralCount: 0,
+    referralEarnings: 0,
+    activity: [],              // [{ text, ts }]
+  };
+}
+
+function makeReferralCode() {
+  // Short, URL-safe, human-shareable code
+  return Array.from({ length: 7 }, () =>
+    'ABCDEFGHJKMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]
+  ).join('');
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return defaultState();
+    const parsed = JSON.parse(raw);
+    // Merge with defaults so new fields introduced later don't break old saves
+    return Object.assign(defaultState(), parsed, {
+      referralCode: parsed.referralCode || makeReferralCode(),
+    });
+  } catch (e) {
+    console.warn('Corrupt local state, resetting.', e);
+    return defaultState();
+  }
+}
+
+function saveState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+}
+
+let state = loadState();
+
+// ---------------------------------------------------------------------
+// 4. REFERRAL CAPTURE — runs once on load, before anything renders
+// ---------------------------------------------------------------------
+(function captureReferral() {
+  const params = new URLSearchParams(location.search);
+  const ref = params.get('ref');
+  if (!ref) return;
+  if (state.referredBy) return;                 // already attributed once
+  if (ref === state.referralCode) return;        // can't refer yourself
+
+  state.referredBy = ref;
+  state.points += CONFIG.REFERRAL_SIGNUP_BONUS;
+  logActivity(`Welcome bonus: +${CONFIG.REFERRAL_SIGNUP_BONUS} pts for joining via a squad invite`);
+
+  // Best-effort local crediting: if the REFERRER's own record happens to
+  // live in this same browser (e.g. you're testing on one device), credit
+  // them immediately. Across two different devices this cannot fire —
+  // there is no shared database in a fully static, serverless build.
+  creditReferrerIfLocal(ref, CONFIG.REFERRAL_SIGNUP_BONUS);
+
+  saveState();
+})();
+
+function creditReferrerIfLocal(code, pointsEarnedByFriend) {
+  // Scans ONLY this browser's own storage. Included for completeness /
+  // local testing — it will not find a referrer who signed up on a
+  // different phone or browser.
+  if (state.referralCode === code) return;
+  // There's only ever one state object per browser in this design, so
+  // there's nothing further to scan — this hook exists for anyone who
+  // wants to extend the app with a multi-profile or shared-backend mode.
+}
+
+// ---------------------------------------------------------------------
+// 5. RENDER HELPERS
+// ---------------------------------------------------------------------
+const $ = (id) => document.getElementById(id);
+
+function currentTier() {
+  let tier = CONFIG.TIERS[0];
+  for (const t of CONFIG.TIERS) if (state.points >= t.min) tier = t;
+  return tier;
+}
+
+function nextTier() {
+  return CONFIG.TIERS.find(t => t.min > state.points) || null;
+}
+
+function fmt(n) { return n.toLocaleString('en-US'); }
+
+function flashPoints() {
+  const el = $('pointsDisplay');
+  el.classList.remove('pop');
+  void el.offsetWidth; // restart animation
+  el.classList.add('pop');
+}
+
+function addPoints(amount, reason) {
+  state.points += amount;
+  if (reason) logActivity(`${amount >= 0 ? '+' : ''}${fmt(amount)} pts — ${reason}`);
+  saveState();
+  render();
+  flashPoints();
+}
+
+function logActivity(text) {
+  state.activity.unshift({ text, ts: Date.now() });
+  state.activity = state.activity.slice(0, 30);
+}
+
+function showToast(msg) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.classList.remove('hidden');
+  t.style.display = 'block';
+  clearTimeout(showToast._h);
+  showToast._h = setTimeout(() => { t.classList.add('hidden'); t.style.display = 'none'; }, 2200);
+}
+
+function render() {
+  // --- HUD points ---
+  $('pointsDisplay').textContent = fmt(state.points);
+
+  // --- Tier / progress ---
+  const tier = currentTier();
+  const nt = nextTier();
+  $('tierName').textContent = tier.name;
+  $('tierIcon').textContent = tier.icon;
+  $('pointsToNext').textContent = nt ? fmt(nt.min - state.points) : '0';
+  const pct = Math.min(100, (state.points / CONFIG.REDEEM_THRESHOLD) * 100);
+  $('progressBar').style.width = pct + '%';
+
+  // --- Daily bonus ---
+  renderDaily();
+
+  // --- Ads / spin credit dots ---
+  $('adRewardLabel').textContent = CONFIG.AD_REWARD;
+  $('adsUntilSpinLabel').textContent = CONFIG.ADS_PER_SPIN;
+  const dotsRow = $('adDotsRow');
+  dotsRow.innerHTML = '';
+  for (let i = 0; i < CONFIG.ADS_PER_SPIN; i++) {
+    const dot = document.createElement('div');
+    dot.className = 'h-1.5 flex-1 rounded-full ' + (i < state.adsSinceSpin ? 'bg-gold' : 'bg-line');
+    dotsRow.appendChild(dot);
+  }
+
+  // --- Spin wheel ---
+  $('spinCreditsLabel').textContent = state.spinCredits;
+  $('spinBtn').disabled = state.spinCredits <= 0;
+  $('spinReadyDot').className = 'w-2.5 h-2.5 rounded-full ' + (state.spinCredits > 0 ? 'bg-ok pulse-dot' : 'bg-line');
+
+  // --- Referral ---
+  const link = `${location.origin}${location.pathname}?ref=${state.referralCode}`;
+  $('refLinkInput').value = link;
+  $('refPctLabel').textContent = Math.round(CONFIG.REFERRAL_PERCENT * 100) + '%';
+  $('refCountLabel').textContent = state.referralCount;
+  $('refEarnLabel').textContent = fmt(state.referralEarnings);
+  if (state.referredBy) {
+    $('referredNotice').textContent = `You joined via invite code ${state.referredBy}.`;
+    $('referredNotice').classList.remove('hidden');
+  }
+
+  // --- Diamond store ---
+  renderStore();
+
+  // --- Activity feed ---
+  const feed = $('activityFeed');
+  if (state.activity.length === 0) {
+    feed.innerHTML = '<p class="px-4 py-6 text-center text-mute text-xs">No activity yet — claim your first bonus.</p>';
+  } else {
+    feed.innerHTML = state.activity.map(a => `
+      <div class="px-4 py-2.5 flex items-center justify-between gap-3">
+        <span class="text-xs text-white/90">${escapeHtml(a.text)}</span>
+        <span class="text-[10px] text-mute font-mono shrink-0">${timeAgo(a.ts)}</span>
+      </div>`).join('');
+  }
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function timeAgo(ts) {
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 60) return 'now';
+  if (s < 3600) return Math.floor(s / 60) + 'm';
+  if (s < 86400) return Math.floor(s / 3600) + 'h';
+  return Math.floor(s / 86400) + 'd';
+}
+
+// =====================================================================
+// 6. DAILY BONUS
+// =====================================================================
+let dailyInterval = null;
+
+function renderDaily() {
+  const btn = $('dailyBtn');
+  const status = $('dailyStatus');
+  const streakBadge = $('streakBadge');
+
+  if (state.dailyStreak > 0) {
+    streakBadge.textContent = `🔥 ${state.dailyStreak}-day streak`;
+    streakBadge.classList.remove('hidden');
+  } else {
+    streakBadge.classList.add('hidden');
+  }
+
+  const now = Date.now();
+  const nextClaimAt = state.lastDailyClaim ? state.lastDailyClaim + CONFIG.DAILY_COOLDOWN_MS : 0;
+
+  if (!state.lastDailyClaim || now >= nextClaimAt) {
+    btn.disabled = false;
+    btn.textContent = 'Claim';
+    btn.classList.remove('opacity-40', 'grayscale');
+    const nextReward = Math.min(
+      CONFIG.DAILY_BASE_REWARD + state.dailyStreak * CONFIG.DAILY_STREAK_STEP,
+      CONFIG.DAILY_STREAK_CAP
+    );
+    status.textContent = `Ready — worth +${nextReward} pts today.`;
+    clearInterval(dailyInterval);
+  } else {
+    btn.disabled = true;
+    btn.classList.add('opacity-40', 'grayscale');
+    clearInterval(dailyInterval);
+    dailyInterval = setInterval(() => {
+      const remaining = nextClaimAt - Date.now();
+      if (remaining <= 0) { renderDaily(); return; }
+      status.textContent = `Next bonus in ${formatDuration(remaining)}`;
+      btn.textContent = formatDuration(remaining, true);
+    }, 1000);
+  }
+}
+
+function formatDuration(ms, short = false) {
+  const totalSec = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return short ? `${pad(h)}:${pad(m)}:${pad(s)}` : `${pad(h)}h ${pad(m)}m ${pad(s)}s`;
+}
+
+$('dailyBtn').addEventListener('click', () => {
+  const now = Date.now();
+  const nextClaimAt = state.lastDailyClaim ? state.lastDailyClaim + CONFIG.DAILY_COOLDOWN_MS : 0;
+  if (state.lastDailyClaim && now < nextClaimAt) return;
+
+  // Streak logic: keep streak if claimed within the grace window, else reset
+  const withinGrace = state.lastDailyClaim && (now - state.lastDailyClaim) <= CONFIG.DAILY_STREAK_GRACE_MS;
+  state.dailyStreak = withinGrace ? state.dailyStreak + 1 : 1;
+
+  const reward = Math.min(
+    CONFIG.DAILY_BASE_REWARD + (state.dailyStreak - 1) * CONFIG.DAILY_STREAK_STEP,
+    CONFIG.DAILY_STREAK_CAP
+  );
+  state.lastDailyClaim = now;
+  addPoints(reward, `Daily bonus (day ${state.dailyStreak})`);
+  maybeCreditReferrer(reward);
+  showToast(`Daily bonus claimed: +${reward} pts`);
+});
+
+// =====================================================================
+// 7. WATCH AD FLOW
+// =====================================================================
+let adCountdownInterval = null;
+let adTimeLeft = 0;
+
+$('watchAdBtn').addEventListener('click', openAdModal);
+
+function openAdModal() {
+  $('adModal').classList.remove('hidden');
+  $('adModal').classList.add('flex');
+  $('adModalReward').textContent = CONFIG.AD_REWARD;
+  $('claimAdRewardBtn').disabled = true;
+  adTimeLeft = CONFIG.AD_WATCH_SECONDS;
+  $('adTimerLabel').textContent = adTimeLeft;
+
+  // -----------------------------------------------------------------
+  // ADSTERRA DIRECT LINK — replace with your own Direct Link URL from
+  // the Adsterra dashboard. Opening it in a new tab is what actually
+  // serves the ad; the countdown below just gates the reward client
+  // side (see ADSTERRA SETUP notes for why a real postback needs a
+  // server, and why this gate is the honest static-site alternative).
+  // -----------------------------------------------------------------
+  const ADSTERRA_DIRECT_LINK = 'https://www.profitableratecpmnetwork.com/httm1n7p?key=28e5102bdca6688bd4c2458131c388a2';
+  try { window.open(ADSTERRA_DIRECT_LINK, '_blank', 'noopener'); } catch (e) { /* popup blocked, ignore */ }
+
+  const circumference = 2 * Math.PI * 44;
+  const ring = $('adRingProgress');
+  clearInterval(adCountdownInterval);
+  adCountdownInterval = setInterval(() => {
+    adTimeLeft -= 1;
+    $('adTimerLabel').textContent = Math.max(adTimeLeft, 0);
+    const progress = 1 - (adTimeLeft / CONFIG.AD_WATCH_SECONDS);
+    ring.style.strokeDashoffset = circumference * (1 - progress);
+    if (adTimeLeft <= 0) {
+      clearInterval(adCountdownInterval);
+      $('claimAdRewardBtn').disabled = false;
+      $('adTimerLabel').textContent = '✓';
+    }
+  }, 1000);
+}
+
+function closeAdModal() {
+  $('adModal').classList.add('hidden');
+  $('adModal').classList.remove('flex');
+  clearInterval(adCountdownInterval);
+}
+$('closeAdModal').addEventListener('click', closeAdModal);
+
+$('claimAdRewardBtn').addEventListener('click', () => {
+  state.totalAdsWatched += 1;
+  state.adsSinceSpin += 1;
+  let earned = CONFIG.AD_REWARD;
+
+  if (state.adsSinceSpin >= CONFIG.ADS_PER_SPIN) {
+    state.adsSinceSpin = 0;
+    state.spinCredits += 1;
+    showToast('Ad watched — free spin unlocked!');
+  } else {
+    showToast(`Ad watched: +${earned} pts`);
+  }
+
+  addPoints(earned, 'Watched an ad');
+  maybeCreditReferrer(earned);
+  closeAdModal();
+});
+
+// =====================================================================
+// 8. REFERRAL EARNINGS (see note in captureReferral about the
+//    cross-device limitation of a fully static build)
+// =====================================================================
+function maybeCreditReferrer(pointsJustEarned) {
+  if (!state.referredBy) return; // this visitor wasn't referred, nothing to pass upstream
+  const cut = Math.round(pointsJustEarned * CONFIG.REFERRAL_PERCENT);
+  if (cut <= 0) return;
+  // Recorded locally on the referred user's own profile so the
+  // relationship is visible even though the referrer's balance can't
+  // be reached from here in a pure static/no-database build.
+  state.referralEarnings += 0; // (referred user doesn't earn this — see UI note)
+  saveState();
+}
+
+// =====================================================================
+// 9. SPIN WHEEL — canvas rendering + weighted random + rotation animation
+// =====================================================================
+const canvas = $('wheelCanvas');
+const ctx = canvas.getContext('2d');
+const wheelRadius = canvas.width / 2;
+let wheelRotation = 0; // radians, current visual rotation
+
+function drawWheel(rotation = 0) {
+  const segments = CONFIG.WHEEL;
+  const segAngle = (2 * Math.PI) / segments.length;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(wheelRadius, wheelRadius);
+  ctx.rotate(rotation);
+
+  segments.forEach((seg, i) => {
+    const start = i * segAngle;
+    const end = start + segAngle;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, wheelRadius - 2, start, end);
+    ctx.closePath();
+    ctx.fillStyle = seg.color;
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(10,12,14,0.6)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // Label
+    ctx.save();
+    ctx.rotate(start + segAngle / 2);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = seg.color === '#1B1F24' ? '#8B939B' : '#0A0C0E';
+    ctx.font = '700 13px Rajdhani, sans-serif';
+    ctx.fillText(seg.label, wheelRadius - 14, 5);
+    ctx.restore();
+  });
+
+  ctx.restore();
+}
+
+drawWheel(0);
+
+function weightedPickIndex() {
+  const total = CONFIG.WHEEL.reduce((sum, s) => sum + s.weight, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < CONFIG.WHEEL.length; i++) {
+    r -= CONFIG.WHEEL[i].weight;
+    if (r <= 0) return i;
+  }
+  return CONFIG.WHEEL.length - 1;
+}
+
+let spinning = false;
+
+$('spinBtn').addEventListener('click', () => {
+  if (spinning || state.spinCredits <= 0) return;
+  spinning = true;
+  $('spinBtn').disabled = true;
+
+  const segCount = CONFIG.WHEEL.length;
+  const segAngle = (2 * Math.PI) / segCount;
+  const targetIndex = weightedPickIndex();
+
+  // Land the pointer (fixed at top, i.e. angle = -PI/2 in unrotated wheel
+  // space) in the middle of targetIndex's segment, plus multiple full spins.
+  const targetSegmentMid = targetIndex * segAngle + segAngle / 2;
+  const fullSpins = 5 + Math.floor(Math.random() * 3); // 5-7 full turns
+  const finalRotation = (fullSpins * 2 * Math.PI) + (2 * Math.PI - targetSegmentMid) - Math.PI / 2;
+
+  const duration = 4200;
+  const startTime = performance.now();
+  const startRotation = wheelRotation % (2 * Math.PI);
+
+  function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+
+  function animate(now) {
+    const elapsed = now - startTime;
+    const t = Math.min(elapsed / duration, 1);
+    const eased = easeOutCubic(t);
+    const rotation = startRotation + eased * finalRotation;
+    drawWheel(rotation);
+    if (t < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      wheelRotation = rotation;
+      finishSpin(targetIndex);
+    }
+  }
+  requestAnimationFrame(animate);
+});
+
+function finishSpin(index) {
+  spinning = false;
+  state.spinCredits -= 1;
+  const seg = CONFIG.WHEEL[index];
+
+  $('wheelPointer').classList.remove('pointer-hit');
+  void $('wheelPointer').offsetWidth;
+  $('wheelPointer').classList.add('pointer-hit');
+
+  if (seg.points > 0) {
+    addPoints(seg.points, 'Lucky spin');
+    maybeCreditReferrer(seg.points);
+    $('spinResultEmoji').textContent = seg.points >= 500 ? '🏆' : '🎉';
+    $('spinResultTitle').textContent = 'You won!';
+    $('spinResultSub').textContent = `+${seg.points} points added`;
+  } else {
+    saveState();
+    render();
+    $('spinResultEmoji').textContent = '😅';
+    $('spinResultTitle').textContent = 'So close!';
+    $('spinResultSub').textContent = 'No reward this spin — try again next time.';
+  }
+  $('spinResultModal').classList.remove('hidden');
+  $('spinResultModal').classList.add('flex');
+}
+
+$('closeSpinResult').addEventListener('click', () => {
+  $('spinResultModal').classList.add('hidden');
+  $('spinResultModal').classList.remove('flex');
+});
+
+// =====================================================================
+// 10. REFERRAL — copy link
+// =====================================================================
+$('copyRefBtn').addEventListener('click', async () => {
+  const val = $('refLinkInput').value;
+  try {
+    await navigator.clipboard.writeText(val);
+    showToast('Referral link copied');
+  } catch (e) {
+    $('refLinkInput').select();
+    document.execCommand('copy');
+    showToast('Referral link copied');
+  }
+});
+
+// =====================================================================
+// 11. DIAMOND STORE + REDEEM MODAL + TELEGRAM SUBMISSION
+// =====================================================================
+let selectedPackage = null; // the diamond pack currently open in the modal
+
+function renderStore() {
+  const grid = $('storeGrid');
+  grid.innerHTML = CONFIG.DIAMOND_PACKAGES.map((pkg, i) => {
+    const affordable = state.points >= pkg.cost;
+    return `
+      <button data-pkg-index="${i}"
+        class="store-card btn-press text-left rounded-2xl border p-3.5 transition
+          ${affordable ? 'border-gold/40 bg-gradient-to-b from-panel2 to-panel glow-gold' : 'border-line bg-panel opacity-60'}">
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-2xl">💎</span>
+          ${affordable ? '<span class="w-2 h-2 rounded-full bg-ok pulse-dot"></span>' : '<span class="text-xs">🔒</span>'}
+        </div>
+        <p class="font-display font-bold text-base leading-none">${pkg.diamonds}</p>
+        <p class="text-[10px] text-mute uppercase tracking-wide mt-0.5 mb-2">Diamonds</p>
+        <p class="font-mono text-xs ${affordable ? 'text-gold' : 'text-mute'}">${fmt(pkg.cost)} pts</p>
+      </button>`;
+  }).join('');
+
+  grid.querySelectorAll('.store-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const pkg = CONFIG.DIAMOND_PACKAGES[Number(card.dataset.pkgIndex)];
+      if (state.points < pkg.cost) {
+        showToast(`Need ${fmt(pkg.cost - state.points)} more pts for ${pkg.diamonds} 💎`);
+        return;
+      }
+      openRedeemModal(pkg);
+    });
+  });
+}
+
+function openRedeemModal(pkg) {
+  selectedPackage = pkg;
+  $('redeemPackageTitle').textContent = `${pkg.diamonds} Diamonds`;
+  $('redeemPackageCost').textContent = `Costs ${fmt(pkg.cost)} pts`;
+  $('redeemError').classList.add('hidden');
+  $('redeemSuccess').classList.add('hidden');
+  $('redeemModal').classList.remove('hidden');
+  $('redeemModal').classList.add('flex');
+}
+$('closeRedeemModal').addEventListener('click', () => {
+  $('redeemModal').classList.add('hidden');
+  $('redeemModal').classList.remove('flex');
+});
+
+$('proofInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  const preview = $('proofPreview');
+  if (!file) { preview.classList.add('hidden'); return; }
+  preview.src = URL.createObjectURL(file);
+  preview.classList.remove('hidden');
+});
+
+$('redeemForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const errorEl = $('redeemError');
+  const successEl = $('redeemSuccess');
+  const btn = $('submitRedeemBtn');
+  errorEl.classList.add('hidden');
+  successEl.classList.add('hidden');
+
+  const playerId = $('playerIdInput').value.trim();
+  const playerName = $('playerNameInput').value.trim();
+  const file = $('proofInput').files[0];
+
+  if (!selectedPackage) {
+    errorEl.textContent = 'Pick a diamond pack from the store first.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  if (!/^\d{6,12}$/.test(playerId)) {
+    errorEl.textContent = 'Enter a valid numeric Free Fire Player ID.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  if (!file) {
+    errorEl.textContent = 'Please attach a proof screenshot.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  // Re-check the balance here too — points may have been spent elsewhere
+  // (or the tab left open) since the store card was tapped.
+  if (state.points < selectedPackage.cost) {
+    errorEl.textContent = `Not enough points — need ${fmt(selectedPackage.cost - state.points)} more.`;
+    errorEl.classList.remove('hidden');
+    return;
+  }
+  if (TELEGRAM.BOT_TOKEN.includes('YOUR_BOT_TOKEN') || TELEGRAM.CHAT_ID.includes('YOUR_CHAT_ID')) {
+    errorEl.textContent = 'Telegram bot not configured yet — see setup instructions.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  try {
+    const caption = [
+      `💎 New diamond redemption — Booyah Vault`,
+      `Pack: ${selectedPackage.diamonds} diamonds (${fmt(selectedPackage.cost)} pts)`,
+      `Player ID: ${playerId}`,
+      playerName ? `IGN: ${playerName}` : null,
+      `Points balance before spend: ${fmt(state.points)}`,
+      `Referral code: ${state.referralCode}`,
+      state.referredBy ? `Referred by: ${state.referredBy}` : null,
+    ].filter(Boolean).join('\n');
+
+    const formData = new FormData();
+    formData.append('chat_id', TELEGRAM.CHAT_ID);
+    formData.append('caption', caption);
+    formData.append('photo', file);
+
+    const res = await fetch(`https://api.telegram.org/bot${TELEGRAM.BOT_TOKEN}/sendPhoto`, {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.description || 'Telegram API error');
+
+    state.points -= selectedPackage.cost;
+    logActivity(`Redeemed ${selectedPackage.diamonds} 💎 for ${fmt(selectedPackage.cost)} pts`);
+    saveState();
+    render();
+    flashPoints();
+    successEl.classList.remove('hidden');
+    $('redeemForm').reset();
+    $('proofPreview').classList.add('hidden');
+    showToast('Submitted for verification');
+  } catch (err) {
+    console.error(err);
+    errorEl.textContent = 'Could not reach Telegram. Check your connection and try again.';
+    errorEl.classList.remove('hidden');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Send for verification';
+  }
+});
+
+// =====================================================================
+// 12. INIT
+// =====================================================================
+render();
+</script>
+</body>
+</html>
